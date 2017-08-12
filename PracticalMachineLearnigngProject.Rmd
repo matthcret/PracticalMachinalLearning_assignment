@@ -1,102 +1,237 @@
 ---
-title: "Motor Trend: Automatic and Manual transmission cars"
+title: "Practical Machine Learning Course Project"
 author: "Matth Cret"
-date: "July, 15 2017"
+date: "August, 12 2017"
 output:
-  word_document: default
-  pdf_document:
-    keep_md: yes
+  html_document:
+    keep_md: true
 ---
 
-## Synopsis
+The study is carried out using RStudio 1.0.143.
 
-You work for Motor Trend, a magazine about the automobile industry. Looking at a data set of a collection of cars, they are interested in exploring the relationship between a set of variables and miles per gallon (MPG) (outcome). They are particularly interested in the following two questions:
+## Project Background
 
-* “Is an automatic or manual transmission better for MPG”
-* "Quantify the MPG difference between automatic and manual transmissions"
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here:  
+http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
 
-## Preprocessing the dataset
+## Getting Data
 
-The data set used is called mtcars. It is embedded in R.
+The training data for this project are available here:  
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
 
-```{r dataset_preprocessing}
-data("mtcars")
+The test data are available here:  
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+Both csv files are downloaded in the same directory where the R Markdown file is located. The data sets are loaded as data.frame objects set.training and set.testing respectively.
+
+```{r gettingdata}
+### Initialize the url and file name
+url.training <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+url.testing <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+training.csv <- paste(getwd(),"/training.csv",sep = "")
+testing.csv <- paste(getwd(),"/testing.csv",sep = "")
+
+### Download the csv files
+if (!file.exists(training.csv)) {
+    download.file(url.training, destfile=training.csv)
+}
+if (!file.exists(testing.csv)) {
+    download.file(url.testing, destfile=testing.csv)
+}
+
+### Load the csv files as data.frame objects
+set.training <- read.csv(training.csv)
+set.testing <- read.csv(testing.csv)
+
+### Analyse dimensions of the two datasets
+dim(set.training)
+dim(set.testing)
 ```
 
-## Analysis of the dataset
+From above it can be seen that the training dataset is way bigger than the testing dataset.
 
-The database is composed by 11 columns, so it has 11 different typs of variables. As part of the analysis the relationship between mpg and other variables is taken into account. It is possible to have a first look at it by using the correlation function.
+## Cleaning Data & Exploratory Analysis
 
-```{r dataset_correlation}
-cor(mtcars$mpg,mtcars)
+First the predictors with zero variance are found and remove from the training set.
+
+```{r cleaningdata0}
+### Load caret package
+library(caret)
+
+### Identify predictors with zero variance
+zerovar <- nearZeroVar(set.training, saveMetrics=FALSE)
+
+### Count the number of predictors with zero variance
+length(zerovar)
 ```
 
-The correlation function shows that mpg is highly correlated with itself, as one could expect, but it also reports that cyl, disp, wt are highly negatively correlated with mpg.
+60 predictors have zero variance. All of them will be removed from set.training.
 
-## Processing the transmission variable
-
-mtcars is a dataset embedded in R; it means that in the code it is reported also a description of the variables involved. It is possible to access the description by typing ?mtcars. It is reported that the transmission variable is am, and it can have only two different numerical values:
-
-* 0 = automatic
-* 1 = manual
-
-```{r am_factor}
-mtcars$am <- as.factor(mtcars$am)
-levels(mtcars$am) <-c("automatic", "manual")
+```{r cleaningdata1}
+### Remove some predictors that have no value
+set.training <- set.training[,-zerovar]
 ```
 
-At this stage it is possible already to see the most fuel-efficient option between automatic and manual transmission. The relationship is reported in Appendix A.
+Now the focus go to predictors have missing values NA.
 
-To support the result shown in the boxplot a t-test can be done. The t-test was chosen because of the limited amount of observations (32) in the dataset.
-
-```{r am_ttest}
-t.test(mtcars$mpg~mtcars$am,conf.level=0.95)
+```{r cleaningdata2}
+### Count the number of predictors with some missing values
+length(set.training[colSums(is.na(set.training)) > 0])
 ```
 
-The p-value reported is 0.001374. It is far below the p-value of the null hypothesis 0.05 hence it is possible to reject the null hypothesis and conclude that automatic transmission cars have lower mpg compared with manual transmission cars. This result, though, is obtained while diregarding all characteristics other than the transmission: these might affect mpg way more than am does. A better analysis can be done while performing a multiple linear regression.
+41 predictors have missing values. All of them will be removed from set.training.
 
-## Multiple linear regression
+```{r cleaningdata3}
+### Identify columns indexes of predictors with half of the rows with missing values
+na.index <- c()
+for (i in 1:ncol(set.training)) {
+    if (sum(is.na(set.training[,i])) >= nrow(set.training)/2) {
+        na.index <- c(na.index, i)
+    }
+}
 
-First the regression model taking into account all the variables in the dataset is computed. Then the function step() is applied and the best model is determined.
+### Remove some predictors with missing values
+set.training <- set.training[, -na.index]
 
-```{r mlr_stepmodel}
-allmodel = lm(mpg ~ ., data = mtcars)
-bestmodel = step(allmodel, direction = "backward",trace=0)
-summary(bestmodel)
+### Display first three rows for each remaining column
+head(set.training,3)
 ```
 
-The variables included in the model are wt, qsec and am.
+UserIDs and timestamps are not useful predictors that can be used in order to predict the variable "classe", hence they can be removed from the dataset. These predictors correspond to the first 6 columns.
 
-## Conclusion
-
-The model has a 84.9% total variance (adjusted variance of 83.3%).
-The coefficients gives the following conclusions:
-
-* when the weight increases by 1000 lbs, the mpg decreased by -3.9165
-* when the 1/4 mile time increases the mpg factor increases by 1.2259 miles
-* when the car has a manual transmission the mpg increases by 2.9358
-
-mpg largely depends on the interaction of different factors, so it is difficult to determine the profitability of a car given just the type of transmission used.
-
-# Appendix
-
-## Appendix A
-
-```{r appendixa}
-boxplot(mtcars$mpg ~ mtcars$am, data = mtcars,
-        outpch = 19, ylab="mpg",
-        xlab="transmission type",main="mpg vs transmission type", col="red")
+```{r cleaningdata4}
+### Remove useless predictors
+set.training <- set.training[, -c(1, 2, 3, 4, 5, 6)]
 ```
 
-## Appendix B
+The following step is the identification of correlated predictors.
 
-```{r appendixb}
-par(mfrow=c(2,2))    
-plot(bestmodel)
+```{r exploratoryanalysis0}
+### Load corrplot package
+library(corrplot)
+
+### Create a correlation matrix
+cormatrix <- abs(cor(set.training[,-53]))
+
+### NA are translated into 0s
+cormatrix[is.na(cormatrix)] <- 0
+
+### Remove the influence of predictors strongly related to themselves
+diag(cormatrix) <- 0
+
+### Plot the correlation
+corrplot(cormatrix)
 ```
 
-## Appendix C
+From the matrix can be seen how some of the predictors are strongly correlated to some others. This is not good for the model, whose accuracy decreases in such a case.
 
-```{r appendixc}
-pairs(mpg~.,data=mtcars)
+```{r exploratoryanalysis1}
+### Identify the predictors that are highly correlated
+cor <- findCorrelation(cormatrix, cutoff=0.8)
+
+### Remove the predictors that are corellated
+set.training <- set.training[, -cor]
+
+### Analyse dimensions of the dataset
+dim(set.training)
+```
+
+The dataset ends up having 40 predictors.
+
+## Predictive Modeling
+
+classe has 5 distict values: A, B, C, D, E. Such variables are called categorical and the problem of the study is, hence, a classification problem. Decision Tree, Random Forest, and the Gradient Boost supervised machine learning algorithms will be applied.
+
+A good modeling approach needs a training data set and a validation data set. The data in set.training will undergo a 75/25 split of the training set and validation set.
+
+```{r predictivemodeling0}
+set.seed(1000)
+
+### Split into training and validation dataset
+inTrain <- createDataPartition(set.training$classe, p=0.75)[[1]]
+training <- set.training[inTrain,]
+validation <- set.training[-inTrain,]
+```
+
+To prevent the overfitting of the model (it can reduce the accuracy) k-folds cross validation is used.
+
+```{r predictivemodeling1}
+### 5-fold cross validation
+control <- trainControl(method='cv', number=5)
+```
+
+### Decision Tree 
+
+```{r decisiontree0}
+### Load rpart package
+library(rpart)
+
+### Train the model using decision tree
+model.rpart <- train(classe ~ ., method='rpart',
+                     trControl=control, data=training)
+```
+
+Now the decision tree model is used to make the prediction and its accuracy is computed with the confusion matrix.
+
+```{r decisiontree1}
+### Predict the outcome
+predict.rpart <- predict(model.rpart, validation)
+
+### Determine the accuracy
+confusionMatrix(predict.rpart, validation$classe)$overall[1]
+```
+
+### Random Forest 
+
+```{r randomforest0}
+### Load randomForest package
+library(randomForest)
+
+### Train the model using random forest
+model.rf <- randomForest(classe ~ ., data=training)
+```
+
+Now the random forest model is used to make the prediction and its accuracy is computed with the confusion matrix.
+
+```{r randomforest1}
+### Predict the outcome
+predict.rf <- predict(model.rf, validation)
+
+### Determine the accuracy
+confusionMatrix(predict.rf, validation$classe)$overall[1]
+```
+
+### Gradient Boost 
+
+```{r gradientboost0}
+### Train the model using gradient boost
+gbm.out <- capture.output(
+  model.gbm <- train(classe ~ ., method='gbm',
+                       trControl=control, data=training)
+)
+rm(gbm.out)
+```
+
+Now the gradient boost model is used to make the prediction and its accuracy is computed with the confusion matrix.
+
+```{r gradientboost1}
+### Predict the outcome
+predict.gbm <- predict(model.gbm, validation)
+
+### Determine the accuracy
+confusionMatrix(predict.gbm, validation$classe)$overall[1]
+```
+
+The values of accuracy reported above clearly show how the Random Forest algorithm is the most accurate model. 
+
+## Final Model Testing
+
+The Random Forest predictive model is the more suited to use as final model.
+
+```{r finalmodeltest}
+### Predict the outcome on the testing set
+predict.final <- predict(model.rf, set.testing)
+
+### Show the final outcomes
+predict.final
 ```
