@@ -1,0 +1,102 @@
+---
+title: "Motor Trend: Automatic and Manual transmission cars"
+author: "Matth Cret"
+date: "July, 15 2017"
+output:
+  word_document: default
+  pdf_document:
+    keep_md: yes
+---
+
+## Synopsis
+
+You work for Motor Trend, a magazine about the automobile industry. Looking at a data set of a collection of cars, they are interested in exploring the relationship between a set of variables and miles per gallon (MPG) (outcome). They are particularly interested in the following two questions:
+
+* “Is an automatic or manual transmission better for MPG”
+* "Quantify the MPG difference between automatic and manual transmissions"
+
+## Preprocessing the dataset
+
+The data set used is called mtcars. It is embedded in R.
+
+```{r dataset_preprocessing}
+data("mtcars")
+```
+
+## Analysis of the dataset
+
+The database is composed by 11 columns, so it has 11 different typs of variables. As part of the analysis the relationship between mpg and other variables is taken into account. It is possible to have a first look at it by using the correlation function.
+
+```{r dataset_correlation}
+cor(mtcars$mpg,mtcars)
+```
+
+The correlation function shows that mpg is highly correlated with itself, as one could expect, but it also reports that cyl, disp, wt are highly negatively correlated with mpg.
+
+## Processing the transmission variable
+
+mtcars is a dataset embedded in R; it means that in the code it is reported also a description of the variables involved. It is possible to access the description by typing ?mtcars. It is reported that the transmission variable is am, and it can have only two different numerical values:
+
+* 0 = automatic
+* 1 = manual
+
+```{r am_factor}
+mtcars$am <- as.factor(mtcars$am)
+levels(mtcars$am) <-c("automatic", "manual")
+```
+
+At this stage it is possible already to see the most fuel-efficient option between automatic and manual transmission. The relationship is reported in Appendix A.
+
+To support the result shown in the boxplot a t-test can be done. The t-test was chosen because of the limited amount of observations (32) in the dataset.
+
+```{r am_ttest}
+t.test(mtcars$mpg~mtcars$am,conf.level=0.95)
+```
+
+The p-value reported is 0.001374. It is far below the p-value of the null hypothesis 0.05 hence it is possible to reject the null hypothesis and conclude that automatic transmission cars have lower mpg compared with manual transmission cars. This result, though, is obtained while diregarding all characteristics other than the transmission: these might affect mpg way more than am does. A better analysis can be done while performing a multiple linear regression.
+
+## Multiple linear regression
+
+First the regression model taking into account all the variables in the dataset is computed. Then the function step() is applied and the best model is determined.
+
+```{r mlr_stepmodel}
+allmodel = lm(mpg ~ ., data = mtcars)
+bestmodel = step(allmodel, direction = "backward",trace=0)
+summary(bestmodel)
+```
+
+The variables included in the model are wt, qsec and am.
+
+## Conclusion
+
+The model has a 84.9% total variance (adjusted variance of 83.3%).
+The coefficients gives the following conclusions:
+
+* when the weight increases by 1000 lbs, the mpg decreased by -3.9165
+* when the 1/4 mile time increases the mpg factor increases by 1.2259 miles
+* when the car has a manual transmission the mpg increases by 2.9358
+
+mpg largely depends on the interaction of different factors, so it is difficult to determine the profitability of a car given just the type of transmission used.
+
+# Appendix
+
+## Appendix A
+
+```{r appendixa}
+boxplot(mtcars$mpg ~ mtcars$am, data = mtcars,
+        outpch = 19, ylab="mpg",
+        xlab="transmission type",main="mpg vs transmission type", col="red")
+```
+
+## Appendix B
+
+```{r appendixb}
+par(mfrow=c(2,2))    
+plot(bestmodel)
+```
+
+## Appendix C
+
+```{r appendixc}
+pairs(mpg~.,data=mtcars)
+```
